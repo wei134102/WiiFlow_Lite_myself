@@ -271,7 +271,7 @@ void CMenu::_launchPlugin(dir_discHdr *hdr)
 		settime(637962048000000000);// Aug 16, 2022
 	
 	/* launch plugin with args */
-	gprintf("launching plugin app\n");
+	gprintf("launching plugin app\n",plugin_file);
 	_launchHomebrew(plugin_file, arguments);
 }
 
