@@ -271,7 +271,7 @@ void CMenu::_launchPlugin(dir_discHdr *hdr)
 		settime(637962048000000000);// Aug 16, 2022
 	
 	/* launch plugin with args */
-	gprintf("launching plugin app\n",plugin_file);
+	gprintf("launching plugin app %s\n");
 	_launchHomebrew(plugin_file, arguments);
 }
 
@@ -297,6 +297,7 @@ void CMenu::_launchHomebrew(const char *filepath, vector<string> arguments)
 	cleanup(); 
 
 	AddBootArgument(filepath);
+	gprintf("launching homebrew app dol: %s\n", filepath);
 	for(u32 i = 0; i < arguments.size(); ++i)
 	{
 		gprintf("app argument: %s\n", arguments[i].c_str());
