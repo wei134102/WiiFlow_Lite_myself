@@ -297,7 +297,6 @@ void CMenu::_launchHomebrew(const char *filepath, vector<string> arguments)
 	cleanup(); 
 
 	AddBootArgument(filepath);
-	gprintf("launching homebrew app dol: %s\n", filepath);
 	for(u32 i = 0; i < arguments.size(); ++i)
 	{
 		gprintf("app argument: %s\n", arguments[i].c_str());
