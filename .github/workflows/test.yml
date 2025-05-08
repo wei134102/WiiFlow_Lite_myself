@@ -54,7 +54,7 @@ jobs:
           echo "sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: 
           name: wiiflow_lite_${{ env.sha }}
           path: |
