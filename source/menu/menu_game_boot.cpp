@@ -301,6 +301,7 @@ void CMenu::_launchHomebrew(const char *filepath, vector<string> arguments)
 	{
 		gprintf("app argument: %s\n", arguments[i].c_str());
 		AddBootArgument(arguments[i].c_str());
+		gprintf("app argument: %s\n", arguments[i].c_str());
 	}
 
 	ShutdownBeforeExit();// before launching homebrew or plugin dol
