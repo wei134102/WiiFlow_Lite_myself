@@ -103,12 +103,12 @@ int main()
 		u32 offset = 0;
 		Disc_FindPartition(&offset);
 		WDVD_OpenPartition(offset, &GameIOS);
-		Disc_SetLowMem();
+		Disc_SetLowMem(normalCFG.JustDanceGame);
 		if(normalCFG.vidMode == 5)
 			normalCFG.patchVidMode = 1; //progressive mode requires this
 		vmode = Disc_SelectVMode(normalCFG.vidMode, &vmode_reg);// requires Disc_ID[3]
 		AppEntrypoint = Apploader_Run(normalCFG.vidMode, vmode, normalCFG.vipatch, normalCFG.countryString, normalCFG.patchVidMode, normalCFG.aspectRatio, normalCFG.returnTo,  
-						normalCFG.patchregion, normalCFG.private_server, normalCFG.server_addr, normalCFG.videoWidth, normalCFG.patchFix480p, normalCFG.deflicker, normalCFG.BootType);
+						normalCFG.patchregion, normalCFG.private_server, normalCFG.server_addr, normalCFG.videoWidth, normalCFG.patchFix480p, normalCFG.deflicker, wbfsDev == 2, normalCFG.BootType);
 		WDVD_Close();
 	}
 	else if(normalCFG.BootType == TYPE_CHANNEL)

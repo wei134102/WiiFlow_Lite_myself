@@ -30,13 +30,15 @@ static const char *GameID = (const char*)0x80000000;
 #define APPLDR_CODE		0x918// usblgx uses APPLDR_OFFSET + 0x20 - huh?
 
 void maindolpatches(void *dst, int len, u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryString, u8 patchVidModes, int aspectRatio, 
-					u32 returnTo, bool patchregion, u8 private_server, const char *server_addr, u8 deflicker, u8 bootType);
+					u8 videoWidth, u32 returnTo, bool patchregion, u8 private_server, const char *server_addr, u8 deflicker, u8 bootType);
 static void patch_NoDiscinDrive(void *buffer, u32 len);
 static void Anti_002_fix(void *Address, int Size);
 static bool Remove_001_Protection(void *Address, int Size);
 static void PrinceOfPersiaPatch();
 static void NewSuperMarioBrosPatch();
-static void Patch_23400_and_MKWii_vulnerability();
+static void patch_sdcard();
+static void patch_re4();
+static void Patch_MKWii_vulnerability();
 bool hookpatched = false;
 
 // wiiflow uses a struct to hold the appldr hdr and usblgx uses a u32 buffer[32] array to hold it.
@@ -51,15 +53,8 @@ static struct
 } apploader_hdr ATTRIBUTE_ALIGN(32);// 16+4+4+4+4=32 bytes
 
 u32 Apploader_Run(u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryString, u8 patchVidModes, int aspectRatio, u32 returnTo, 
-					bool patchregion , u8 private_server, const char *server_addr, u8 videoWidth, bool patchFix480p, u8 deflicker, u8 bootType)
+					bool patchregion , u8 private_server, const char *server_addr, u8 videoWidth, bool patchFix480p, u8 deflicker, bool SD_card, u8 bootType)
 {
-	//! Disable private server for games that still have official servers.
-	if(memcmp(GameID, "SC7", 3) == 0 || memcmp(GameID, "RJA", 3) == 0 ||
-		memcmp(GameID, "SM8", 3) == 0 || memcmp(GameID, "SZB", 3) == 0 || memcmp(GameID, "R9J", 3) == 0)
-	{
-		private_server = PRIVSERV_OFF; // Private server patching causes error 20100
-	}
-	
 	// if either of these 2 games - adds internal wip codes before do_wip_code() is called in maindolpatches()
 	// note: using external .wip codes for these games will prevent their internal codes.
 	PrinceOfPersiaPatch();
@@ -108,10 +103,10 @@ u32 Apploader_Run(u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryStrin
 		WDVD_Read(dst, len, offset);
 		// if server is wiimmfi and game is mario kart wii don't patch private server here, do_new_wiimfi() patches it below.
 		if(private_server == PRIVSERV_WIIMMFI && memcmp("RMC", GameID, 3) == 0)
-			maindolpatches(dst, len, vidMode, vmode, vipatch, countryString, patchVidModes, aspectRatio, returnTo, patchregion, 
+			maindolpatches(dst, len, vidMode, vmode, vipatch, countryString, patchVidModes, aspectRatio, videoWidth, returnTo, patchregion, 
 							0, NULL, deflicker, bootType);
 		else
-			maindolpatches(dst, len, vidMode, vmode, vipatch, countryString, patchVidModes, aspectRatio, returnTo, patchregion, 
+			maindolpatches(dst, len, vidMode, vmode, vipatch, countryString, patchVidModes, aspectRatio, videoWidth, returnTo, patchregion, 
 							private_server,  server_addr, deflicker, bootType);
 			
 		DCFlushRange(dst, len);
@@ -120,10 +115,12 @@ u32 Apploader_Run(u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryStrin
 	}
 	free_wip();
 
+	if(SD_card)
+		patch_sdcard();// patch to play exite truck or kirby return to dreamland from SD card
+		
 	patch_kirby((u8 *)0x80000000);// can't be done during maindolpatches.
 	
-	if(videoWidth == WIDTH_FRAMEBUFFER)
-		patch_width((void*)0x80000000, 0x900000);
+	patch_re4();
 	
 	if(hooktype != 0 && hookpatched)
 		ocarina_do_code();
@@ -138,7 +135,7 @@ u32 Apploader_Run(u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryStrin
 	//! Wiimmfi will handle that on its own through the update payload.
 	//! This will also patch error 23400 for a couple games that still have official servers.
 	if(private_server != PRIVSERV_WIIMMFI)
-		Patch_23400_and_MKWii_vulnerability();
+		Patch_MKWii_vulnerability();
 	
 	else //PRIVSERV_WIIMMFI
 	{
@@ -153,7 +150,7 @@ u32 Apploader_Run(u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryStrin
 }
 
 void maindolpatches(void *dst, int len, u8 vidMode, GXRModeObj *vmode, bool vipatch, bool countryString, u8 patchVidModes, int aspectRatio, 
-					u32 returnTo, bool patchregion , u8 private_server, const char *serverAddr, u8 deflicker, u8 bootType)
+					u8 videoWidth, u32 returnTo, bool patchregion , u8 private_server, const char *serverAddr, u8 deflicker, u8 bootType)
 {
 	u8 vfilter_off[7] = {0, 0, 21, 22, 21, 0, 0};
 	u8 vfilter_low[7] = {4, 4, 16, 16, 16, 4, 4};
@@ -182,6 +179,8 @@ void maindolpatches(void *dst, int len, u8 vidMode, GXRModeObj *vmode, bool vipa
 		patch_NoDiscinDrive(dst, len);
 	if(patchregion)
 		PatchRegion(dst, len);
+	if(videoWidth == WIDTH_FRAMEBUFFER)
+		patch_width(dst, len);
 	if(deflicker == DEFLICKER_ON_LOW)
 	{
 		patch_vfilters(dst, len, vfilter_low);
@@ -310,6 +309,51 @@ static void NewSuperMarioBrosPatch()
 	}
 }
 
+static void patch_sdcard()
+{
+    // Blackb0x/Wiidev might patch this at the cIOS level at some point, but this works for now
+
+    // Excite Truck
+    if (memcmp(GameID, "REXE01", 6) == 0)
+        *(u32 *)0x800b9e48 = 0x4800014c;
+    else if (memcmp(GameID, "REXP01", 6) == 0)
+        *(u32 *)0x800ba358 = 0x4800014c;
+    else if (memcmp(GameID, "REXJ01", 6) == 0)
+        *(u32 *)0x800ba404 = 0x4800014c;
+
+    // Kirby's Return to Dream Land
+    else if (memcmp(GameID, "SUKE01", 6) == 0)
+    {
+        *(u32 *)0x8022da10 = 0x60000000;
+        *(u32 *)0x8022da48 = 0x60000000;
+    }
+    else if (memcmp(GameID, "SUKP01", 6) == 0)
+    {
+        *(u32 *)0x8022e800 = 0x60000000;
+        *(u32 *)0x8022e838 = 0x60000000;
+    }
+    else if (memcmp(GameID, "SUKJ01", 6) == 0)
+    {
+        *(u32 *)0x8022c66c = 0x60000000;
+        *(u32 *)0x8022c6a4 = 0x60000000;
+    }
+    else if (memcmp(GameID, "SUKK01", 6) == 0)
+    {
+        *(u32 *)0x8022dfc4 = 0x60000000;
+        *(u32 *)0x8022dffc = 0x60000000;
+    }
+}
+
+static void patch_re4()
+{
+    if (memcmp(GameID, "RB4E08", 6) == 0)
+        *(u32 *)0x8016B260 = 0x38600001;
+    else if (memcmp(GameID, "RB4P08", 6) == 0)
+        *(u32 *)0x8016B094 = 0x38600001;
+    else if (memcmp(GameID, "RB4X08", 6) == 0)
+        *(u32 *)0x8016B0C8 = 0x38600001;
+}
+
 static bool Remove_001_Protection(void *Address, int Size)
 {
 	static const u8 SearchPattern[] = {0x40, 0x82, 0x00, 0x0C, 0x38, 0x60, 0x00, 0x01, 0x48, 0x00, 0x02, 0x44, 0x38, 0x61, 0x00, 0x18};
@@ -328,49 +372,16 @@ static bool Remove_001_Protection(void *Address, int Size)
 	return false;
 }
 
-static void Patch_23400_and_MKWii_vulnerability()
+static void Patch_MKWii_vulnerability()
 {
 	// Thanks to Seeky for the MKWii gecko codes
-	// Thanks to InvoxiPlayGames for the gecko codes for the 23400 fix.
 	// Reimplemented by Leseratte without the need for a code handler.
 
 	u32 * patch_addr = 0;
 	char * patched = 0; 
 
-	// Patch error 23400 for CoD (Black Ops, Reflex, MW3) and Rock Band 3 / The Beatles
-
-	if (memcmp(GameID, "SC7", 3) == 0) 
-	{
-		gprintf("Patching error 23400 for game %s\n", GameID);
-		*(u32 *)0x8023c954 = 0x41414141;
-	}
-
-	else if (memcmp(GameID, "RJA", 3) == 0) 
-	{
-		gprintf("Patching error 23400 for game %s\n", GameID);
-		*(u32 *)0x801b838c = 0x41414141;
-	}
-
-	else if (memcmp(GameID, "SM8", 3) == 0) 
-	{
-		gprintf("Patching error 23400 for game %s\n", GameID);
-		*(u32 *)0x80238c74 = 0x41414141;
-	}
-
-	else if (memcmp(GameID, "SZB", 3) == 0) 
-	{
-		gprintf("Patching error 23400 for game %s\n", GameID);
-		*(u32 *)0x808e3b20 = 0x41414141;
-	}
-
-	else if (memcmp(GameID, "R9J", 3) == 0) 
-	{
-		gprintf("Patching error 23400 for game %s\n", GameID);
-		*(u32 *)0x808d6934 = 0x41414141;
-	}
-
 	// Patch RCE vulnerability in MKWii.
-	else if (memcmp(GameID, "RMC", 3) == 0) 
+	if (memcmp(GameID, "RMC", 3) == 0) 
 	{
 		switch (GameID[3]) {
 
